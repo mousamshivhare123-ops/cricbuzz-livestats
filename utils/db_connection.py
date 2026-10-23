@@ -1,6 +1,7 @@
 """Centralised SQLite connection handling (swap the body for MySQL/PostgreSQL if needed)."""
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -13,6 +14,9 @@ DB_PATH = Path(os.getenv("DB_PATH", ROOT / "data" / "cricbuzz.db"))
 if not DB_PATH.is_absolute():
     DB_PATH = ROOT / DB_PATH
 SCHEMA_FILE = ROOT / "database" / "schema.sql"
+
+
+_LOCK = threading.Lock()
 
 
 class DatabaseError(Exception):
@@ -53,8 +57,19 @@ def db_is_ready() -> bool:
         return False
 
 
+def ensure_database() -> None:
+    """Build the sample database if tables are missing (safe across threads/sessions)."""
+    if db_is_ready():
+        return
+    with _LOCK:
+        if not db_is_ready():
+            from database.seed_data import seed
+            seed()
+
+
 def run_query(sql: str, params: tuple = ()) -> pd.DataFrame:
     """Run a read query and return a DataFrame."""
+    ensure_database()
     with get_connection() as conn:
         try:
             return pd.read_sql_query(sql, conn, params=params)
@@ -64,5 +79,6 @@ def run_query(sql: str, params: tuple = ()) -> pd.DataFrame:
 
 def execute(sql: str, params: tuple = ()) -> int:
     """Run INSERT/UPDATE/DELETE inside a transaction; return affected rows."""
+    ensure_database()
     with get_connection() as conn:
         return conn.execute(sql, params).rowcount
