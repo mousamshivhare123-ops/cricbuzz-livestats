@@ -14,5 +14,5 @@ nav = st.navigation([
     st.Page("pages/crud_operations.py", title="CRUD Operations", icon="🛠"),
 ])
 if not db_is_ready():
-    st.sidebar.warning("Database is empty. Run `python -m database.seed_data` for sample data.")
-nav.run()
+    from database.seed_data import seed
+    seed()
